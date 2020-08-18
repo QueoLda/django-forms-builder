@@ -12,6 +12,7 @@ except ImportError:
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render_to_response
 from django.template import RequestContext
+from django.template.base import Origin, Template, Context, TemplateDoesNotExist 
 from django.utils.http import urlquote
 from django.views.generic.base import TemplateView
 from email_extras.utils import send_mail_template
@@ -35,6 +36,7 @@ class FormDetail(TemplateView):
 
     def get(self, request, *args, **kwargs):
         context = self.get_context_data(**kwargs)
+        self.context = Context(self.context_dict)
         login_required = context["form"].login_required
         if login_required and not request.user.is_authenticated:
             path = urlquote(request.get_full_path())
@@ -78,11 +80,20 @@ class FormDetail(TemplateView):
                     content_type="application/json")
             return HttpResponse(json_context, content_type="application/json")
         return super(FormDetail, self).render_to_response(context, **kwargs)
+    
+    def render_string(self, string):
+        if self.context:
+            t = Template(string)
+            return t.render(self.context)
+        else:
+            return string
 
     def send_emails(self, request, form_for_form, form, entry, attachments):
         subject = form.email_subject
         if not subject:
             subject = "%s - %s" % (form.title, entry.entry_time)
+        else:
+            subject = self.render_string(subject)
         fields = []
         for (k, v) in form_for_form.fields.items():
             value = form_for_form.cleaned_data[k]
